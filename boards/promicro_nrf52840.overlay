@@ -1,0 +1,14 @@
+/ {
+	aliases {
+		co2 = &scd4x;
+	};
+};
+
+&i2c1 {
+    status = "okay";
+    scd4x: scd4x@62 {
+		status = "okay";
+		compatible = "sensirion,scd40";
+		reg = <0x62>;
+	};
+};
