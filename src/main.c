@@ -8,7 +8,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 
-static const struct device *const sen_scd = DEVICE_DT_GET(DT_ALIAS(co2));
+static const struct device *const sen_scd = DEVICE_DT_GET(DT_ALIAS(scd41));
 
 void start_co2_measurement(void)
 {
