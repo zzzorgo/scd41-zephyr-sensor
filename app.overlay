@@ -1,6 +1,7 @@
 / {
 	aliases {
 		scd41 = &scd4x;
+		bme280 = &bme280;
 	};
 };
 
@@ -12,4 +13,9 @@
 		reg = <0x62>;
 		mode = <1>;
 	};
+	bme280: bme280@76 {
+		status = "okay";
+        compatible = "bosch,bme280";
+        reg = <0x76>;
+    };
 };
