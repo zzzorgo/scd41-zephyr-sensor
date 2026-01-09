@@ -82,7 +82,7 @@ void start_co2_measurement(void)
 
 int main(void)
 {
-	printk("Starting SCD4x sensor app\n");
+	printk("Starting SCD4x sensor app with nRF Connect SDK\n");
 	start_co2_measurement();
 	return 0;
 }
