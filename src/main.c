@@ -107,7 +107,7 @@ int main(void)
 
 		int16_t temp_bt_home = (temperature_measurement.val1) * 100 + round_to_integer(temperature_measurement.val2 / 10000.0);
 		int16_t humidity_bt_home = (humidity_measurement.val1) * 100 + round_to_integer(humidity_measurement.val2 / 10000.0);
-		int32_t pressure_bt_home = pressure_measurement.val1 * 1000 + round_to_integer(pressure_measurement.val2 / 100000.0);
+		int32_t pressure_bt_home = pressure_measurement.val1 * 1000 + round_to_integer(pressure_measurement.val2 / 1000.0);
 		int32_t co2_bt_home = co2_measurement.val1;
 		uint8_t battery_charge = 1;
 
