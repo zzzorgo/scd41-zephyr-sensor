@@ -61,7 +61,7 @@ int _start_advertising(struct bt_le_ext_adv *full_advertisement)
 	return err;
 }
 
-int start_advertising(struct bt_le_ext_adv **full_advertisement)
+int prepare_bluetooth_advertising(struct bt_le_ext_adv **full_advertisement)
 {
 	int err;
 
@@ -81,14 +81,12 @@ int start_advertising(struct bt_le_ext_adv **full_advertisement)
 		return err;
 	}
 
-	err = bt_le_ext_adv_set_data(*full_advertisement, advertisement_payload, ARRAY_SIZE(advertisement_payload), NULL, 0);
+	return 0;
+}
 
-	if (err) {
-		printk("Failed to set advertising data (err %d)\n", err);
-		return err;
-	}
-
-	err = _start_advertising(*full_advertisement);
+int start_advertising(struct bt_le_ext_adv **full_advertisement)
+{
+	int err = _start_advertising(*full_advertisement);
 
 	if (err) {
 		return err;
