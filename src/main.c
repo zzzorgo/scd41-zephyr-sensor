@@ -12,6 +12,46 @@
 
 #include "bluetoothExposure.h"
 
+float read_battery_voltage() {
+  // The volatile keyword is a type qualifier in C/C++ that tells the compiler a variable's value might change in ways that the compiler cannot detect from the code alone. 
+  // Essentially, it says: "Don't optimize access to this variable because its value might change unexpectedly."
+  volatile uint32_t raw_value = 0;
+  // Configure SAADC
+  NRF_SAADC->ENABLE = 1;
+  NRF_SAADC->RESOLUTION = SAADC_RESOLUTION_VAL_12bit;
+  
+  NRF_SAADC->CH[0].CONFIG = 
+    (SAADC_CH_CONFIG_GAIN_Gain1_4 << SAADC_CH_CONFIG_GAIN_Pos) |
+    (SAADC_CH_CONFIG_MODE_SE << SAADC_CH_CONFIG_MODE_Pos) |
+    (SAADC_CH_CONFIG_REFSEL_Internal << SAADC_CH_CONFIG_REFSEL_Pos);
+  
+  NRF_SAADC->CH[0].PSELP = SAADC_CH_PSELP_PSELP_VDDHDIV5;
+  NRF_SAADC->CH[0].PSELN = SAADC_CH_PSELN_PSELN_NC;
+  
+  // Sample
+  NRF_SAADC->RESULT.PTR = (uint32_t)&raw_value;
+  NRF_SAADC->RESULT.MAXCNT = 1;
+  NRF_SAADC->TASKS_START = 1;
+  while (!NRF_SAADC->EVENTS_STARTED);
+  NRF_SAADC->EVENTS_STARTED = 0;
+  NRF_SAADC->TASKS_SAMPLE = 1;
+  while (!NRF_SAADC->EVENTS_END);
+  NRF_SAADC->EVENTS_END = 0;
+  NRF_SAADC->TASKS_STOP = 1;
+  while (!NRF_SAADC->EVENTS_STOPPED);
+  NRF_SAADC->EVENTS_STOPPED = 0;
+  NRF_SAADC->ENABLE = 0;
+
+  // Force explicit double-precision calculations
+  double raw_double = (double)raw_value;
+  double step1 = raw_double * 2.4;
+  double step2 = step1 / 4095.0;
+  double vddh = 5.0 * step2;
+
+  return (float)vddh;
+}
+
+
 static const struct device *const scd_sensor = DEVICE_DT_GET(DT_ALIAS(scd41));
 static const struct device *const bme_sensor = DEVICE_DT_GET(DT_ALIAS(bme280));
 
@@ -110,7 +150,8 @@ int main(void)
 	int16_t humidity_bt_home = (humidity_measurement.val1) * 100 + round_to_integer(humidity_measurement.val2 / 10000.0);
 	int32_t pressure_bt_home = pressure_measurement.val1 * 1000 + round_to_integer(pressure_measurement.val2 / 1000.0);
 	int32_t co2_bt_home = co2_measurement.val1;
-	uint8_t battery_charge = 1;
+	float battery_voltage = read_battery_voltage();
+	uint8_t battery_charge = ((battery_voltage - 3.4) * 100) / (4.1 - 3.4);
 
 	prepare_bluetooth_advertising(&advertisement);
 
@@ -127,7 +168,7 @@ int main(void)
 
 	while (1)
 	{
-		k_sleep(K_MSEC(6000));
+		k_sleep(K_MSEC(31000));
 
 		get_measurement_data(
 			&co2_measurement,
@@ -140,7 +181,8 @@ int main(void)
 		humidity_bt_home = (humidity_measurement.val1) * 100 + round_to_integer(humidity_measurement.val2 / 10000.0);
 		pressure_bt_home = pressure_measurement.val1 * 1000 + round_to_integer(pressure_measurement.val2 / 1000.0);
 		co2_bt_home = co2_measurement.val1;
-		battery_charge = 1;
+		float battery_voltage = read_battery_voltage();
+		uint8_t battery_charge = ((battery_voltage - 3.4) * 100) / (4.1 - 3.4);
 
 		update_service_data(
 			&advertisement,
