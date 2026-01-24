@@ -1,6 +1,6 @@
 #include <zephyr/types.h>
 #include <stddef.h>
-#include <zephyr/sys/printk.h>
+// #include <zephyr/sys/printk.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
 
@@ -25,13 +25,13 @@ void start_measuring(void)
 {
 	if (!device_is_ready(scd_sensor))
 	{
-		printk("SCD41 %s is not ready.\n", scd_sensor->name);
+// 		printk("SCD41 %s is not ready.\n", scd_sensor->name);
 		return;
 	}
 
 	if (!device_is_ready(bme_sensor))
 	{
-		printk("BME280 %s is not ready.\n", bme_sensor->name);
+// 		printk("BME280 %s is not ready.\n", bme_sensor->name);
 		return;
 	}
 }
@@ -48,7 +48,7 @@ int get_measurement_data(
 
 	if (ret < 0)
 	{
-		printk("failed sample fetch from %s\n", bme_sensor->name);
+// 		printk("failed sample fetch from %s\n", bme_sensor->name);
 		return ret;
 	}
 
@@ -56,9 +56,9 @@ int get_measurement_data(
 	sensor_channel_get(bme_sensor, SENSOR_CHAN_HUMIDITY, humidity_measurement);
 	sensor_channel_get(bme_sensor, SENSOR_CHAN_PRESS, pressure_measurement);
 
-	printk("bme temp %d %d\n", temperature_measurement->val1, temperature_measurement->val2);
-	printk("bme hum %d %d\n", humidity_measurement->val1, humidity_measurement->val2);
-	printk("bme press %d %d\n", pressure_measurement->val1, pressure_measurement->val2);
+// 	printk("bme temp %d %d\n", temperature_measurement->val1, temperature_measurement->val2);
+// 	printk("bme hum %d %d\n", humidity_measurement->val1, humidity_measurement->val2);
+// 	printk("bme press %d %d\n", pressure_measurement->val1, pressure_measurement->val2);
 
 	// pressure in hecto pascals for correct CO2 measurement
 	int pressure_correction = pressure_measurement->val1 * 10 + round_to_integer(pressure_measurement->val2 / 100000.0);
@@ -73,19 +73,19 @@ int get_measurement_data(
 	ret = sensor_sample_fetch(scd_sensor);
 	if (ret < 0)
 	{
-		printk("failed sample fetch from %s\n", scd_sensor->name);
+// 		printk("failed sample fetch from %s\n", scd_sensor->name);
 		return ret;
 	}
 
 	sensor_channel_get(scd_sensor, SENSOR_CHAN_CO2, co2_measurement);
 
-	printk("scd CO2 %d %d\n", co2_measurement->val1, co2_measurement->val2);
+// 	printk("scd CO2 %d %d\n", co2_measurement->val1, co2_measurement->val2);
 	return 0;
 }
 
 int main(void)
 {
-	printk("Starting SCD4x sensor app with nRF Connect SDK\n");
+// 	printk("Starting SCD4x sensor app with nRF Connect SDK\n");
 
 	struct bt_le_ext_adv *advertisement = NULL;
 
@@ -126,11 +126,12 @@ int main(void)
 	);
 
 	start_advertising(&advertisement);
+    k_sleep(K_MSEC(3000));
+    stop_advertising(&advertisement);
+    k_sleep(K_MSEC(60000));
 
 	while (1)
 	{
-		k_sleep(K_MSEC(31000));
-
 		get_measurement_data(
 			&co2_measurement,
 			&temperature_measurement,
@@ -153,6 +154,11 @@ int main(void)
 			co2_bt_home,
 			battery_charge
 		);
+
+        start_advertising(&advertisement);
+        k_sleep(K_MSEC(3000));
+        stop_advertising(&advertisement);
+        k_sleep(K_MSEC(60000));
 	}
 
 	return 0;
