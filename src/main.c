@@ -136,7 +136,7 @@ static int scd4x_write_reg(const struct device *dev, uint8_t cmd, uint16_t *data
 
 	ret = i2c_write_dt(&cfg->bus, tx_buf, sizeof(tx_buf));
 	if (ret < 0) {
-		// printk("Failed to write i2c data.");
+		 //printk("Failed to write i2c data.");
 		return ret;
 	}
 
@@ -152,7 +152,7 @@ int wakeup_scd41(const struct device *dev)
 	scd4x_write_command(dev, SCD4X_CMD_WAKE_UP);
 	int ret = scd4x_write_command(dev, SCD4X_CMD_WAKE_UP);
 	if (ret < 0) {
-		// printk("Failed write wake_up command.");
+		 //printk("Failed write wake_up command.");
 		return ret;
 	}
 
@@ -163,7 +163,7 @@ int power_down_scd41(const struct device *dev)
 {
 	int ret = scd4x_write_command(dev, SCD4X_CMD_POWER_DOWN);
 	if (ret < 0) {
-		// printk("Failed to write power_down command.");
+		 //printk("Failed to write power_down command.");
 		return ret;
 	}
 
@@ -178,7 +178,7 @@ int _set_ambient_pressure_scd41(const struct device *dev, const struct sensor_va
 
 	ret = scd4x_write_reg(dev, SCD4X_CMD_SET_AMBIENT_PRESSURE, &ambient_pressure, 1);
 	if (ret < 0) {
-		// printk("Failed to write set_ambient_pressure register.");
+		 //printk("Failed to write set_ambient_pressure register.");
 		return ret;
 	}
 
@@ -192,7 +192,7 @@ int set_ambient_pressure_scd41(const struct device *dev, const struct sensor_val
 	}
 	int ret = _set_ambient_pressure_scd41(dev, val);
 	if (ret < 0) {
-		// printk("Failed to set ambient pressure.");
+		 //printk("Failed to set ambient pressure.");
 		return ret;
 	}
 	
@@ -272,15 +272,10 @@ int start_measuring(void)
 {
 	if (!device_is_ready(scd_sensor))
 	{
-// 		printk("SCD41 %s is not ready.\n", scd_sensor->name);
+ 		//printk("SCD41 %s is not ready.\n", scd_sensor->name);
 		return -1;
 	}
 
-	int ret = wakeup_scd41(scd_sensor);
-	if (ret < 0) {
-		// printk("Failed write wake_up command.");
-		return ret;
-	}
 
 	struct sensor_value auto_calibration = {
 		.val1 = 0,
@@ -292,16 +287,11 @@ int start_measuring(void)
 	if (auto_calibration.val1 != 0) {
 		auto_calibration.val1 = 0;
 		sensor_attr_set(scd_sensor, SENSOR_CHAN_ALL, SENSOR_ATTR_SCD4X_AUTOMATIC_CALIB_ENABLE, &auto_calibration);
-		ret = scd4x_write_command(scd_sensor, SCD4X_CMD_PERSIST_SETTINGS);
-		if (ret < 0) {
-			// printk("Failed to write persist_settings command.");
-			return ret;
-		}
 	}
 
 	if (!device_is_ready(bme_sensor))
 	{
-// 		printk("BME280 %s is not ready.\n", bme_sensor->name);
+ 		//printk("BME280 %s is not ready.\n", bme_sensor->name);
 		return -1;
 	}
 
@@ -320,7 +310,7 @@ int get_measurement_data(
 
 	if (ret < 0)
 	{
-// 		printk("failed sample fetch from %s\n", bme_sensor->name);
+ 		//printk("failed sample fetch from %s\n", bme_sensor->name);
 		return ret;
 	}
 
@@ -328,9 +318,9 @@ int get_measurement_data(
 	sensor_channel_get(bme_sensor, SENSOR_CHAN_HUMIDITY, humidity_measurement);
 	sensor_channel_get(bme_sensor, SENSOR_CHAN_PRESS, pressure_measurement);
 
-// 	printk("bme temp %d %d\n", temperature_measurement->val1, temperature_measurement->val2);
-// 	printk("bme hum %d %d\n", humidity_measurement->val1, humidity_measurement->val2);
-// 	printk("bme press %d %d\n", pressure_measurement->val1, pressure_measurement->val2);
+ 	//printk("bme temp %d %d\n", temperature_measurement->val1, temperature_measurement->val2);
+ 	//printk("bme hum %d %d\n", humidity_measurement->val1, humidity_measurement->val2);
+ 	//printk("bme press %d %d\n", pressure_measurement->val1, pressure_measurement->val2);
 
 	// pressure in hecto pascals for correct CO2 measurement
 	int pressure_correction = pressure_measurement->val1 * 10 + round_to_integer(pressure_measurement->val2 / 100000.0);
@@ -340,19 +330,30 @@ int get_measurement_data(
 		.val2 = 0,
 	};
 
-	ret = get_co2_data_scd41(scd_sensor, &correction, co2_measurement);
-	if (ret < 0)
-	{
+
+	ret = wakeup_scd41(scd_sensor);
+	if (ret < 0) {
 		return ret;
 	}
 
-// 	printk("scd CO2 %d %d\n", co2_measurement->val1, co2_measurement->val2);
+	sensor_attr_set(scd_sensor, SENSOR_CHAN_CO2, SENSOR_ATTR_SCD4X_AMBIENT_PRESSURE, &correction);
+
+	ret = sensor_sample_fetch(scd_sensor);
+	if (ret < 0)
+	{
+		//printk("failed sample fetch from %s\n", scd_sensor->name);
+		return ret;
+	}
+
+	sensor_channel_get(scd_sensor, SENSOR_CHAN_CO2, co2_measurement);
+
+	//printk("scd CO2 %d %d\n", co2_measurement->val1, co2_measurement->val2);
 	return 0;
 }
 
 int main(void)
 {
-// 	printk("Starting SCD4x sensor app with nRF Connect SDK\n");
+ 	//printk("Starting SCD4x sensor app with nRF Connect SDK\n");
 
 	struct bt_le_ext_adv *advertisement = NULL;
 
