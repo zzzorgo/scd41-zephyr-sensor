@@ -52,10 +52,10 @@ int _start_advertising(struct bt_le_ext_adv *full_advertisement)
 {
 	int err;
 
-	printk("Starting Extended Advertising\n");
+// 	printk("Starting Extended Advertising\n");
 	err = bt_le_ext_adv_start(full_advertisement, BT_LE_EXT_ADV_START_DEFAULT);
 	if (err) {
-		printk("Failed to start extended advertising (err %d)\n", err);
+// 		printk("Failed to start extended advertising (err %d)\n", err);
 	}
 
 	return err;
@@ -68,16 +68,16 @@ int prepare_bluetooth_advertising(struct bt_le_ext_adv **full_advertisement)
 	err = bt_enable(NULL);
 
 	if (err) {
-		printk("Bluetooth init failed (err %d)\n", err);
+// 		printk("Bluetooth init failed (err %d)\n", err);
 		return err;
 	}
 
 	err = bt_le_ext_adv_create(BT_LE_EXT_ADV_CONN, NULL, full_advertisement);
 
-	printk("full_advertisement %p\n", (void*) full_advertisement);
+// 	printk("full_advertisement %p\n", (void*) full_advertisement);
 
 	if (err) {
-		printk("Failed to create advertising set (err %d)\n", err);
+// 		printk("Failed to create advertising set (err %d)\n", err);
 		return err;
 	}
 
@@ -87,6 +87,17 @@ int prepare_bluetooth_advertising(struct bt_le_ext_adv **full_advertisement)
 int start_advertising(struct bt_le_ext_adv **full_advertisement)
 {
 	int err = _start_advertising(*full_advertisement);
+
+	if (err) {
+		return err;
+	}
+
+	return 0;
+}
+
+int stop_advertising(struct bt_le_ext_adv **full_advertisement)
+{
+	int err = bt_le_ext_adv_stop(*full_advertisement);
 
 	if (err) {
 		return err;
@@ -124,7 +135,7 @@ int update_service_data(
 	err = bt_le_ext_adv_set_data(*full_advertisement, advertisement_payload, ARRAY_SIZE(advertisement_payload), NULL, 0);
 
 	if (err) {
-		printk("Failed to update advertising data (err %d)\n", err);
+// 		printk("Failed to update advertising data (err %d)\n", err);
 		return err;
 	}
 

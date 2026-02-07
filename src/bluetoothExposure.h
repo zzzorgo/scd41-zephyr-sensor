@@ -20,3 +20,4 @@ int update_service_data(
 );
 
 int start_advertising(struct bt_le_ext_adv **full_advertisement);
+int stop_advertising(struct bt_le_ext_adv **full_advertisement);
