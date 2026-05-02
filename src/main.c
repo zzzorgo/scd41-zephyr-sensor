@@ -12,6 +12,7 @@
 
 #include "bluetoothExposure.h"
 #include "battery.h"
+#include "special_boot.h"
 
 static const struct device *const scd_sensor = DEVICE_DT_GET(DT_ALIAS(scd41));
 static const struct device *const bme_sensor = DEVICE_DT_GET(DT_ALIAS(bme280));
@@ -146,6 +147,28 @@ static int scd4x_write_reg(const struct device *dev, uint8_t cmd, uint16_t *data
 	return 0;
 }
 
+static int scd4x_read_reg(const struct device *dev, uint8_t *rx_buf, uint8_t rx_buf_size)
+{
+	const struct scd4x_config *cfg = dev->config;
+	int ret;
+
+	ret = i2c_read_dt(&cfg->bus, rx_buf, rx_buf_size);
+	if (ret < 0) {
+		// printk("Failed to read i2c data.");
+		return ret;
+	}
+
+	for (uint8_t i = 0; i < (rx_buf_size / 3); i++) {
+		ret = scd4x_calc_crc(sys_get_be16(&rx_buf[i * 3]));
+		if (ret != rx_buf[(i * 3) + 2]) {
+			// printk("Invalid CRC.");
+			return -EIO;
+		}
+	}
+
+	return 0;
+}
+
 int wakeup_scd41(const struct device *dev)
 {
 	/*send wake up command twice because of an expected nack return in power down mode*/
@@ -181,6 +204,37 @@ int _set_ambient_pressure_scd41(const struct device *dev, const struct sensor_va
 		 //printk("Failed to write set_ambient_pressure register.");
 		return ret;
 	}
+
+	return 0;
+}
+
+int scd4x_forced_recalibration(const struct device *dev, uint16_t target_concentration,
+			       uint16_t *frc_correction)
+{
+	uint8_t rx_buf[3];
+	int ret;
+
+	ret = scd4x_write_reg(dev, SCD4X_CMD_FORCED_RECALIB, &target_concentration, 1);
+	if (ret < 0) {
+		// printk("Failed to write perform_forced_recalibration register.");
+		return ret;
+	}
+
+	ret = scd4x_read_reg(dev, rx_buf, sizeof(rx_buf));
+	if (ret < 0) {
+		// printk("Failed to read perform_forced_recalibration register.");
+		return ret;
+	}
+
+	*frc_correction = sys_get_be16(rx_buf);
+
+	/*from datasheet*/
+	if (*frc_correction == 0xFFFF) {
+		// printk("FRC failed. Returned 0xFFFF.");
+		return -EIO;
+	}
+
+	*frc_correction -= 0x8000;
 
 	return 0;
 }
@@ -268,7 +322,7 @@ int round_to_integer(double number) {
 	return result;
 }
 
-int start_measuring(void)
+int prepare_measuring(void)
 {
 	if (!device_is_ready(scd_sensor))
 	{
@@ -351,8 +405,133 @@ int get_measurement_data(
 	return 0;
 }
 
+int recalibrate() {
+	int ret = 0;
+	struct bt_le_ext_adv* advertisement = NULL;
+
+	ret = prepare_measuring();
+
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = prepare_bluetooth_advertising(&advertisement);
+		
+	if (ret < 0) {
+		return ret;
+	}
+
+	struct sensor_value co2_measurement;
+	struct sensor_value temperature_measurement;
+	struct sensor_value pressure_measurement;
+	struct sensor_value humidity_measurement;
+
+	int64_t ready_to_calibration_time = k_uptime_get() + K_MINUTES(7);
+
+	while (k_uptime_get() < ready_to_calibration_time)
+	{
+		ret = perform_measurement(
+			&advertisement, 
+			&co2_measurement,
+			&temperature_measurement,
+			&pressure_measurement,
+			&humidity_measurement
+		);
+
+		if (ret < 0) {
+			return ret;
+		}
+	}
+	
+	uint16_t frc_correction = 0;
+	ret = wakeup_scd41(scd_sensor);
+	
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = scd4x_forced_recalibration(scd_sensor, 420, &frc_correction);
+	
+	if (ret < 0) {
+		return ret;
+	}
+	//printk("Correction applied: %d ppm", frc_correction);
+
+	return ret;
+}
+
+int perform_measurement(
+	struct bt_le_ext_adv** advertisement,
+	struct sensor_value* co2_measurement,
+	struct sensor_value* temperature_measurement,
+	struct sensor_value* pressure_measurement,
+	struct sensor_value* humidity_measurement
+) {
+	int ret = 0;
+	do {
+		ret = get_measurement_data(
+			co2_measurement,
+			temperature_measurement,
+			pressure_measurement,
+			humidity_measurement
+		);
+		if (ret < 0) {
+			return ret;
+		}
+	} while (co2_measurement->val1 <= 0);
+
+	int16_t temp_bt_home = (temperature_measurement->val1) * 100 + round_to_integer(temperature_measurement->val2 / 10000.0);
+	int16_t humidity_bt_home = (humidity_measurement->val1) * 100 + round_to_integer(humidity_measurement->val2 / 10000.0);
+	int32_t pressure_bt_home = pressure_measurement->val1 * 1000 + round_to_integer(pressure_measurement->val2 / 1000.0);
+	int32_t co2_bt_home = co2_measurement->val1;
+	float battery_voltage = read_battery_voltage();
+	uint8_t battery_charge = ((battery_voltage - 3.4) * 100) / (4.1 - 3.4);
+
+	if (*advertisement != NULL) {
+		ret = update_service_data(
+			advertisement,
+			temp_bt_home,
+			humidity_bt_home,
+			pressure_bt_home,
+			co2_bt_home,
+			battery_charge
+		);
+
+		if (ret < 0) {
+			return ret;
+		}
+
+		ret = start_advertising(advertisement);
+
+		if (ret < 0) {
+			return ret;
+		}
+	
+		k_sleep(K_MSEC(3000));
+		ret = stop_advertising(advertisement);
+
+		if (ret < 0) {
+			return ret;
+		}
+	} else {
+		// to have the same power profile for SCD41 during calibration
+		k_sleep(K_MSEC(3000));
+	}
+
+    k_sleep(K_MSEC(60000));
+
+	return ret;
+}
+
 int main(void)
 {
+	special_boot_config config = {
+        .count_for_special_boot = 3,
+        .delay = 3000,
+        .callback = recalibrate
+    };
+
+    int ret = init_special_boot(&config);
  	//printk("Starting SCD4x sensor app with nRF Connect SDK\n");
 
 	struct bt_le_ext_adv *advertisement = NULL;
@@ -362,72 +541,32 @@ int main(void)
 	struct sensor_value pressure_measurement;
 	struct sensor_value humidity_measurement;
 
-	start_measuring();
+	ret = prepare_measuring();
+	if (ret < 0) {
+		// printk("prepare_measuring failed\n");
+		return ret;
+	}
 
-	do {
-		get_measurement_data(
-			&co2_measurement,
-			&temperature_measurement,
-			&pressure_measurement,
-			&humidity_measurement
-		);
-
-		k_sleep(K_MSEC(30));
-	} while (co2_measurement.val1 <= 0);
-
-	int16_t temp_bt_home = (temperature_measurement.val1) * 100 + round_to_integer(temperature_measurement.val2 / 10000.0);
-	int16_t humidity_bt_home = (humidity_measurement.val1) * 100 + round_to_integer(humidity_measurement.val2 / 10000.0);
-	int32_t pressure_bt_home = pressure_measurement.val1 * 1000 + round_to_integer(pressure_measurement.val2 / 1000.0);
-	int32_t co2_bt_home = co2_measurement.val1;
-	float battery_voltage = read_battery_voltage();
-	uint8_t battery_charge = ((battery_voltage - 3.4) * 100) / (4.1 - 3.4);
-
-	prepare_bluetooth_advertising(&advertisement);
-
-	update_service_data(
-		&advertisement,
-		temp_bt_home,
-		humidity_bt_home,
-		pressure_bt_home,
-		co2_bt_home,
-		battery_charge
-	);
-
-	start_advertising(&advertisement);
-    k_sleep(K_MSEC(3000));
-    stop_advertising(&advertisement);
-    k_sleep(K_MSEC(60000));
+	ret = prepare_bluetooth_advertising(&advertisement);
+	if (ret < 0) {
+		// printk("prepare_bluetooth_advertising failed\n");
+		return ret;
+	}
 
 	while (1)
 	{
-		get_measurement_data(
+		ret = perform_measurement(
+			&advertisement, 
 			&co2_measurement,
 			&temperature_measurement,
 			&pressure_measurement,
 			&humidity_measurement
 		);
-
-		temp_bt_home = (temperature_measurement.val1) * 100 + round_to_integer(temperature_measurement.val2 / 10000.0);
-		humidity_bt_home = (humidity_measurement.val1) * 100 + round_to_integer(humidity_measurement.val2 / 10000.0);
-		pressure_bt_home = pressure_measurement.val1 * 1000 + round_to_integer(pressure_measurement.val2 / 1000.0);
-		co2_bt_home = co2_measurement.val1;
-		float battery_voltage = read_battery_voltage();
-		uint8_t battery_charge = ((battery_voltage - 3.4) * 100) / (4.1 - 3.4);
-
-		update_service_data(
-			&advertisement,
-			temp_bt_home,
-			humidity_bt_home,
-			pressure_bt_home,
-			co2_bt_home,
-			battery_charge
-		);
-
-        start_advertising(&advertisement);
-        k_sleep(K_MSEC(3000));
-        stop_advertising(&advertisement);
-        k_sleep(K_MSEC(60000));
+		if (ret < 0) {
+			// printk("perform_measurement failed\n");
+			return ret;
+		}
 	}
 
-	return 0;
+	return ret;
 }
