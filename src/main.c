@@ -208,7 +208,7 @@ int _set_ambient_pressure_scd41(const struct device *dev, const struct sensor_va
 	return 0;
 }
 
-int scd4x_forced_recalibration(const struct device *dev, uint16_t target_concentration,
+int _scd4x_forced_recalibration(const struct device *dev, uint16_t target_concentration,
 			       uint16_t *frc_correction)
 {
 	uint8_t rx_buf[3];
@@ -426,7 +426,7 @@ int recalibrate() {
 	struct sensor_value pressure_measurement;
 	struct sensor_value humidity_measurement;
 
-	int64_t ready_to_calibration_time = k_uptime_get() + K_MINUTES(7);
+	int64_t ready_to_calibration_time = k_uptime_get() + K_MINUTES(7).ticks;
 
 	while (k_uptime_get() < ready_to_calibration_time)
 	{
@@ -450,7 +450,7 @@ int recalibrate() {
 		return ret;
 	}
 
-	ret = scd4x_forced_recalibration(scd_sensor, 420, &frc_correction);
+	ret = _scd4x_forced_recalibration(scd_sensor, 420, &frc_correction);
 	
 	if (ret < 0) {
 		return ret;
